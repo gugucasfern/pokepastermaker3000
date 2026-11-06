@@ -1,0 +1,12 @@
+import { describe,it,expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { applyTeam,fromShowdown,teamToShowdown,validateDocument,validateTeam } from '../src/lib/converter';
+const fixture=JSON.parse(readFileSync('hoenn_norman.json','utf8'));
+describe('conversor RCT',()=>{
+ it('importa arquivo RCT real e converte todos os seis Pokémon',()=>{const doc=validateDocument(structuredClone(fixture));const paste=teamToShowdown(doc);expect(doc.team).toHaveLength(6);expect(paste).toContain('Slaking @ Leftovers');expect(paste).toContain('Ability: Truant');expect(paste).toContain('- Zen Headbutt');});
+ it('mantém atributos RCT e dados fora do Poképaste no round trip sem edição',()=>{const doc=structuredClone(fixture);const back=fromShowdown(teamToShowdown(doc),doc.team);const out=applyTeam(doc,back);expect(out).toEqual(doc);expect(out.team[4].gimmicks).toEqual({mega:true});expect(out.battleTheme).toBe(fixture.battleTheme);});
+ it('edita nível, habilidade, item e golpes mantendo gimmicks e campos do treinador',()=>{const doc=structuredClone(fixture);let paste=teamToShowdown(doc).replace('Level: 55','Level: 57').replace('Ability: Truant','Ability: Pressure').replace('Leftovers','Sitrus Berry').replace('Zen Headbutt','Psycho Cut');const out=applyTeam(doc,fromShowdown(paste,doc.team));expect(out.team[0]).toMatchObject({level:57,ability:'pressure',heldItem:['sitrus_berry'],moveset:['psychocut','bodyslam','rocktomb','throatchop']});expect(out.battleRules).toEqual(fixture.battleRules);});
+ it('lida com Pokémon duplicados por posição e mantém extensão do RCT',()=>{const doc={team:[{...fixture.team[0],custom:{tag:'first'}},{...fixture.team[0],custom:{tag:'second'}}]};const out=fromShowdown(teamToShowdown(doc),doc.team);expect(out.map(p=>p.custom.tag)).toEqual(['first','second']);});
+ it('preserva objeto e dados específicos ao remover ou reordenar usando operações no array',()=>{const doc=structuredClone(fixture);const reordered=[doc.team[1],doc.team[0],...doc.team.slice(2)].filter((_,i)=>i!==2);const out=applyTeam(doc,reordered);expect(out.team[0].species).toBe('grafaiai');expect(out.team[0].heldItem).toEqual(['focus_sash']);expect(out.team).toHaveLength(5);expect(out.battleFormat).toBe(doc.battleFormat);});
+ it('rejeita JSON inválido/estrutura não reconhecida e valida limites',()=>{expect(()=>validateDocument({name:'x'})).toThrow(/não reconhecido/);expect(validateTeam([{species:'pika',evs:{atk:300}}])).toContain('Pokémon 1: EVS fora do limite (0–252).');});
+});
